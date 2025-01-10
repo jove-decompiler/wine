@@ -33,6 +33,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "ntstatus.h"
 #define WIN32_NO_STATUS
@@ -59,6 +60,7 @@ C_ASSERT( sizeof(struct debug_info) == 0x800 );
 static BOOL init_done;
 static struct debug_info initial_info;  /* debug info for initial thread */
 static unsigned char default_flags = (1 << __WINE_DBCL_ERR) | (1 << __WINE_DBCL_FIXME);
+static int logfd = 2;
 static int nb_debug_options = -1;
 static int options_size;
 static struct __wine_debug_channel *debug_options;
@@ -200,11 +202,26 @@ static void debug_usage(void)
 /* initialize all options at startup */
 static void init_options(void)
 {
+    char *wine_debug_log = getenv("WINEDEBUGLOG");
     char *wine_debug = getenv("WINEDEBUG");
     const char *app_name, *p;
     struct stat st1, st2;
 
     nb_debug_options = 0;
+
+    if (wine_debug_log) {
+        logfd = open(wine_debug_log, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+        if (logfd < 0) {
+            char buffer[MAX_PATH + 1];
+
+            int slen = snprintf(buffer, sizeof(buffer),
+                                "could open wine debug log at \"%s\": %s",
+                                wine_debug_log, strerror(errno));
+
+            write(2, buffer, slen);
+            exit(1);
+        }
+    }
 
     /* check for stderr pointing to /dev/null */
     if (!fstat( 2, &st1 ) && S_ISCHR(st1.st_mode) &&
@@ -279,7 +296,7 @@ NTSTATUS unixcall_wine_dbg_write( void *args )
 {
     struct wine_dbg_write_params *params = args;
 
-    return write( 2, params->str, params->len );
+    return write( logfd, params->str, params->len );
 }
 
 #ifdef _WIN64
@@ -310,7 +327,7 @@ int __cdecl __wine_dbg_output( const char *str )
     if (end)
     {
         ret += append_output( info, str, end + 1 - str );
-        write( 2, info->output, info->out_pos );
+        write( logfd, info->output, info->out_pos );
         info->out_pos = 0;
         str = end + 1;
     }
