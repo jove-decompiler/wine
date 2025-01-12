@@ -60,7 +60,7 @@ C_ASSERT( sizeof(struct debug_info) == 0x800 );
 static BOOL init_done;
 static struct debug_info initial_info;  /* debug info for initial thread */
 static unsigned char default_flags = (1 << __WINE_DBCL_ERR) | (1 << __WINE_DBCL_FIXME);
-static int logfd = 2;
+int logfd = 2;
 static int nb_debug_options = -1;
 static int options_size;
 static struct __wine_debug_channel *debug_options;

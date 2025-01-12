@@ -75,6 +75,8 @@
 #include "unix_private.h"
 #include "wine/debug.h"
 
+extern int logfd;
+
 WINE_DEFAULT_DEBUG_CHANNEL(virtual);
 WINE_DECLARE_DEBUG_CHANNEL(module);
 WINE_DECLARE_DEBUG_CHANNEL(virtual_ranges);
@@ -2725,6 +2727,21 @@ static IMAGE_BASE_RELOCATION *process_relocation_block( char *page, IMAGE_BASE_R
     return (IMAGE_BASE_RELOCATION *)reloc;  /* return address of next block */
 }
 
+static ssize_t path_of_fd(int fd, char *out, size_t len) {
+  ssize_t ret;
+
+  char buff[256];
+  snprintf(buff, sizeof(buff), "/proc/self/fd/%d", fd);
+
+  ret = readlink(buff, out, len);
+
+  if (ret > 0 && ret < len)
+    out[ret] = '\0';
+  else
+    return -1;
+
+  return ret;
+}
 
 /***********************************************************************
  *           map_image_into_view
@@ -2747,6 +2764,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const WCHAR *filena
     struct stat st;
     char *header_end;
     char *ptr = view->base;
+    char fd_path[MAX_PATH+1];
     SIZE_T header_size, total_size = view->size;
     INT_PTR delta;
 
@@ -2857,7 +2875,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const WCHAR *filena
         }
 
         TRACE_(module)( "mapping %s section %.8s at %p off %x size %x virt %x flags %x\n",
-                        debugstr_w(filename), sec->Name, ptr + sec->VirtualAddress,
+                        logfd != 2 && path_of_fd(fd, fd_path, sizeof(fd_path)) > 0 ? fd_path : debugstr_w(filename), sec->Name, ptr + sec->VirtualAddress,
                         (int)sec->PointerToRawData, (int)sec->SizeOfRawData,
                         (int)sec->Misc.VirtualSize, (int)sec->Characteristics );
 
