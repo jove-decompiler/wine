@@ -210,7 +210,7 @@ static void init_options(void)
     nb_debug_options = 0;
 
     if (wine_debug_log) {
-        logfd = open(wine_debug_log, O_CREAT | O_WRONLY | O_TRUNC, 0666);
+        logfd = open(wine_debug_log, O_WRONLY | O_APPEND | O_CREAT, 0666);
         if (logfd < 0) {
             char buffer[MAX_PATH + 1];
 
