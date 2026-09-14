@@ -558,7 +558,7 @@ void start_server( BOOL debug )
 
         status = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
         if (status == 2) return;  /* server lock held by someone else, will retry later */
-        if (status) exit(status);  /* server failed */
+        //if (status) exit(status);  /* server failed */
         started = TRUE;
     }
 }
