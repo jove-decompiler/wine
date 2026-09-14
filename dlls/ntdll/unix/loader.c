@@ -250,6 +250,7 @@ static int build_path_and_exec( pid_t *pid, const char *dir, const char *name, c
 
     argv[0] = build_path( dir, name );
     ret = posix_spawn( pid, argv[0], NULL, NULL, argv, environ );
+
     free( argv[0] );
     return ret;
 }
@@ -545,6 +546,7 @@ void start_server( BOOL debug )
         argv[2] = NULL;
         if (exec_wineserver( &pid, argv )) fatal_error( "could not exec wineserver\n" );
         waitpid( pid, &status, 0 );
+
         status = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
         if (status == 2) return;  /* server lock held by someone else, will retry later */
         if (status) exit(status);  /* server failed */
@@ -2036,8 +2038,10 @@ static void reexec_loader( int argc, char *argv[], char *extra_arg )
         memcpy( new_argv + 2, argv + 1, argc * sizeof(*argv) );
     }
 
+#if 0 /* FIXME???? */
     /* default to 32-bit loader to support 32-bit prefixes */
     if (machine == IMAGE_FILE_MACHINE_AMD64) machine = IMAGE_FILE_MACHINE_I386;
+#endif
 
     loader_exec( new_argv, machine );
     fatal_error( "could not exec the wine loader\n" );
