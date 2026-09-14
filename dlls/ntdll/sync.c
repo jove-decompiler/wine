@@ -297,7 +297,7 @@ NTSTATUS WINAPI RtlDeleteCriticalSection( RTL_CRITICAL_SECTION *crit )
  */
 NTSTATUS WINAPI RtlpWaitForCriticalSection( RTL_CRITICAL_SECTION *crit )
 {
-    unsigned int timeout = 5;
+    unsigned int timeout = 30;
 
     /* Don't allow blocking on a critical section during process termination */
     if (RtlDllShutdownInProgress())
