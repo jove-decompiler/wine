@@ -37,6 +37,8 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
+#include <sys/prctl.h>
+#include <linux/prctl.h>
 #ifdef HAVE_SYS_SYSINFO_H
 # include <sys/sysinfo.h>
 #endif
@@ -90,6 +92,8 @@
 #include "wine/rbtree.h"
 #include "unix_private.h"
 #include "wine/debug.h"
+
+extern int logfd;
 
 WINE_DEFAULT_DEBUG_CHANNEL(virtual);
 WINE_DECLARE_DEBUG_CHANNEL(module);
@@ -238,7 +242,7 @@ static struct file_view *view_block_start, *view_block_end, *next_free_view;
 static const size_t view_block_size = 0x100000;
 static void *preload_reserve_start;
 static void *preload_reserve_end;
-static BOOL force_exec_prot;  /* whether to force PROT_EXEC on all PROT_READ mmaps */
+static BOOL force_exec_prot = TRUE;  /* whether to force PROT_EXEC on all PROT_READ mmaps */
 static BOOL enable_write_exceptions;  /* raise exception on writes to executable memory */
 
 struct range_entry
@@ -2417,6 +2421,14 @@ static NTSTATUS map_file_into_view( struct file_view *view, int fd, size_t start
 
     mprotect( map_addr, map_size, PROT_READ | PROT_WRITE );
     pread( fd, map_addr, size, offset );
+
+    {
+      char buff[65];
+      snprintf(buff, sizeof(buff), "%d:%u", dup(fd), (unsigned)offset);
+
+      prctl(PR_SET_VMA, PR_SET_VMA_ANON_NAME, (unsigned long)map_addr, (unsigned long)map_size, buff);
+    }
+
     return STATUS_SUCCESS;
 }
 
@@ -3038,6 +3050,21 @@ static IMAGE_BASE_RELOCATION *process_relocation_block( char *page, IMAGE_BASE_R
     return (IMAGE_BASE_RELOCATION *)reloc;  /* return address of next block */
 }
 
+static ssize_t path_of_fd(int fd, char *out, size_t len) {
+  ssize_t ret;
+
+  char buff[256];
+  snprintf(buff, sizeof(buff), "/proc/self/fd/%d", fd);
+
+  ret = readlink(buff, out, len);
+
+  if (ret > 0 && ret < len)
+    out[ret] = '\0';
+  else
+    return -1;
+
+  return ret;
+}
 
 /***********************************************************************
  *           map_image_into_view
@@ -3059,6 +3086,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
     struct stat st;
     char *header_end;
     char *ptr = view->base;
+    char fd_path[MAX_PATH+1];
     SIZE_T header_size, header_map_size, total_size = view->size;
     SIZE_T align_mask = max( image_info->alignment - 1, page_mask );
     INT_PTR delta;
@@ -3176,7 +3204,7 @@ static NTSTATUS map_image_into_view( struct file_view *view, const UNICODE_STRIN
         }
 
         TRACE_(module)( "mapping %s section %.8s at %p off %x size %x virt %x flags %x\n",
-                        debugstr_us(nt_name), sec[i].Name, ptr + sec[i].VirtualAddress,
+                        logfd != 2 && path_of_fd(fd, fd_path, sizeof(fd_path)) > 0 ? fd_path : debugstr_us(nt_name), sec[i].Name, ptr + sec[i].VirtualAddress,
                         sec[i].PointerToRawData, sec[i].SizeOfRawData,
                         sec[i].Misc.VirtualSize, sec[i].Characteristics );
 
@@ -4706,6 +4734,7 @@ void *virtual_setup_exception( struct thread_data *data, void *stack_ptr, size_t
         UINT diff = stack_info.start + host_page_size - stack;
         ERR( "stack overflow %u bytes addr %p stack %p (%p-%p-%p)\n",
              diff, rec->ExceptionAddress, stack, stack_info.start, stack_info.limit, stack_info.end );
+
         abort_thread(1);
     }
     else if (stack < stack_info.limit)
