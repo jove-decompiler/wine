@@ -249,7 +249,16 @@ static int build_path_and_exec( pid_t *pid, const char *dir, const char *name, c
     int ret;
 
     argv[0] = build_path( dir, name );
+#if 1
     ret = posix_spawn( pid, argv[0], NULL, NULL, argv, environ );
+#else
+    pid_t child = fork();
+    if (!child)
+      execve(argv[0], argv, environ);
+    else
+      *pid = child;
+    ret = 0;
+#endif
 
     free( argv[0] );
     return ret;
